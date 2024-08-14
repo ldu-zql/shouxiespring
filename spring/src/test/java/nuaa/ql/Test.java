@@ -7,8 +7,8 @@ public class Test {
     public static void main(String[] args) {
         QinglinApplicationContext qinglinApplicationContext = new QinglinApplicationContext(AppConfig.class);
 
-        Object userService = qinglinApplicationContext.getBean("userService");
-
-        System.out.println(userService);
+        System.out.println(qinglinApplicationContext.getBean("userService"));
+        System.out.println(qinglinApplicationContext.getBean("userService"));
+        System.out.println(qinglinApplicationContext.getBean("userService"));
     }
 }
