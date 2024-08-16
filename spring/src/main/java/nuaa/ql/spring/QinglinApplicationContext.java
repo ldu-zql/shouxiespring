@@ -1,21 +1,26 @@
 package nuaa.ql.spring;
 
+import nuaa.ql.spring.ann.AutoWire;
 import nuaa.ql.spring.ann.Component;
 import nuaa.ql.spring.ann.ComponentScan;
 import nuaa.ql.spring.ann.Scope;
 import nuaa.ql.spring.bean.BeanDefinition;
+import nuaa.ql.spring.bean.BeanNameAware;
+import nuaa.ql.spring.bean.BeanPostProcessor;
+import nuaa.ql.spring.bean.InitializePropertiesSet;
 
 import java.io.File;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class QinglinApplicationContext {
     private Map<String,Object> sigontonObj=new ConcurrentHashMap<>();
     private Map<String,Object> beanDefin=new ConcurrentHashMap<>();
+    private List<BeanPostProcessor> beanPostProcessorList=new ArrayList<>();
     private Class aClass;
 
     public QinglinApplicationContext(Class aClass) {
@@ -23,17 +28,72 @@ public class QinglinApplicationContext {
         //componentScan--扫描包
         scan(aClass);
         //根据beanDefinition创建单例bean
+        createSigonton();
+        //依赖注入
+        fieldProcess();
+
+
+    }
+
+    private void fieldProcess() {
+        Set<String> beanNames = sigontonObj.keySet();
+        for (String beanName : beanNames) {
+            BeanDefinition beanDefinition = (BeanDefinition) beanDefin.get(beanName);
+            Class aClass = beanDefinition.getaClass();
+            Object bean = sigontonObj.get(beanName);
+            Field[] fields = aClass.getDeclaredFields();
+            for (Field field : fields) {
+
+                //依赖注入
+                if(field.isAnnotationPresent(AutoWire.class)){
+                    AutoWire autoWire = field.getDeclaredAnnotation(AutoWire.class);
+                    String name = autoWire.value();
+                    if("".equals(name)){
+                        name = field.getName();
+                    }
+                    Object autoWireBean = getBean(name);
+                    field.setAccessible(true);
+                    try {
+                        field.set(bean,autoWireBean);
+                    } catch (IllegalAccessException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            //回调
+            if(bean instanceof BeanNameAware){
+                ((BeanNameAware) bean).setBeanName(beanName);
+            }
+            for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+                beanPostProcessor.beforeInit(bean,beanName);
+            }
+            //初始化
+            if(bean instanceof InitializePropertiesSet){
+                ((InitializePropertiesSet) bean).afterPropertiesSet();
+            }
+            for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+                Object obj = beanPostProcessor.afterInit(bean, beanName);
+                sigontonObj.put(beanName,obj);
+            }
+        }
+    }
+
+    private void createSigonton(){
         for(String beanName:beanDefin.keySet()){
             BeanDefinition beanDefinition = (BeanDefinition) beanDefin.get(beanName);
             if(beanDefinition.getScope().equals("sigonton")){
                 try {
-                    sigontonObj.put(beanName,createBean(beanDefinition.getaClass()));
+                    Object bean = createBean(beanDefinition.getaClass());
+                    if(bean instanceof BeanPostProcessor){
+                        beanPostProcessorList.add((BeanPostProcessor) bean);
+                    }
+                    sigontonObj.put(beanName,bean);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         }
-
     }
     public Object createBean(Class aClass) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         return aClass.getDeclaredConstructor().newInstance();

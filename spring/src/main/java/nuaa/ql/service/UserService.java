@@ -1,9 +1,8 @@
 package nuaa.ql.service;
 
-import nuaa.ql.spring.ann.Component;
-import nuaa.ql.spring.ann.Scope;
+import nuaa.ql.spring.bean.BeanNameAware;
+import nuaa.ql.spring.bean.InitializePropertiesSet;
 
-@Component
-@Scope("propType")
-public class UserService {
+public interface UserService{
+    public void test();
 }
